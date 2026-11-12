@@ -1,0 +1,229 @@
+name: Brand Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to publish, for example v1.0.0'
+        required: true
+        type: string
+      app_name:
+        description: 'App display name'
+        required: false
+        type: string
+      v2board_url:
+        description: 'v2board base URL'
+        required: false
+        type: string
+      app_tagline:
+        description: 'Login page tagline'
+        required: false
+        type: string
+      profile_label:
+        description: 'Imported profile name'
+        required: false
+        type: string
+      v2board_timeout_seconds:
+        description: 'v2board request timeout in seconds'
+        required: false
+        type: string
+      icon_path:
+        description: 'Optional repository-relative icon path, for example branding/icon.png'
+        required: false
+        type: string
+
+concurrency:
+  group: brand-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.47.6'
+  GO_VERSION: '1.27.1'
+  NDK_VERSION: r28c
+  APP_NAME: ${{ inputs.app_name || vars.APP_NAME || '99294837' }}
+  V2BOARD_URL: ${{ inputs.v2board_url || vars.V2BOARD_URL || 'https://free.99294837.xyz' }}
+  APP_TAGLINE: ${{ inputs.app_tagline || vars.APP_TAGLINE || '登录后自动同步订阅，简单、安全、跨平台' }}
+  PROFILE_LABEL: ${{ inputs.profile_label || vars.PROFILE_LABEL || '我的订阅' }}
+  V2BOARD_TIMEOUT_SECONDS: ${{ inputs.v2board_timeout_seconds || vars.V2BOARD_TIMEOUT_SECONDS || '20' }}
+  APP_ICON_PATH: ${{ inputs.icon_path || vars.ICON_PATH || '' }}
+  RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}${{ matrix.arch && format(' ({0})', matrix.arch) || '' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: android
+            os: ubuntu-latest
+            artifact_suffix: android
+          - platform: windows
+            os: windows-2022
+            arch: amd64
+            artifact_suffix: windows-amd64
+          - platform: linux
+            os: ubuntu-22.04
+            arch: amd64
+            artifact_suffix: linux-amd64
+          - platform: macos
+            os: macos-15-intel
+            arch: amd64
+            artifact_suffix: macos-amd64
+          - platform: macos
+            os: macos-latest
+            arch: arm64
+            artifact_suffix: macos-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Enable git long paths (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: git config --global core.longpaths true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: core/go.sum
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Setup Xcode
+        if: matrix.platform == 'macos'
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.3.app || sudo xcode-select -s /Applications/Xcode_26.2.app
+          xcodebuild -version
+
+      - name: Setup NDK
+        if: matrix.platform == 'android'
+        uses: nttld/setup-ndk@v1
+        id: build-ndk
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+          add-to-path: true
+          link-to-sdk: true
+
+      - name: Setup Java
+        if: matrix.platform == 'android'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        if: matrix.platform == 'android'
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Install Linux packaging dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgtk-3-dev libayatana-appindicator3-dev libsecret-1-dev locate rpm patchelf libfuse2
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Apply brand configuration
+        shell: pwsh
+        env:
+          BRAND_APP_NAME: ${{ env.APP_NAME }}
+          BRAND_V2BOARD_URL: ${{ env.V2BOARD_URL }}
+          BRAND_TAGLINE: ${{ env.APP_TAGLINE }}
+          BRAND_PROFILE_LABEL: ${{ env.PROFILE_LABEL }}
+          V2BOARD_TIMEOUT_SECONDS: ${{ env.V2BOARD_TIMEOUT_SECONDS }}
+          BRAND_ICON_PATH: ${{ env.APP_ICON_PATH }}
+        run: |
+          $parameters = @{
+            Platform = '${{ matrix.platform }}'
+            AppName = $env:BRAND_APP_NAME
+            V2BoardUrl = $env:BRAND_V2BOARD_URL
+            Tagline = $env:BRAND_TAGLINE
+            ProfileLabel = $env:BRAND_PROFILE_LABEL
+            SkipBuild = $true
+          }
+          if ($env:BRAND_ICON_PATH) {
+            if (-not (Test-Path -LiteralPath $env:BRAND_ICON_PATH)) {
+              throw "Icon path does not exist: $env:BRAND_ICON_PATH"
+            }
+            $parameters.IconPath = $env:BRAND_ICON_PATH
+          }
+          & ./tool/build_brand.ps1 @parameters
+
+      - name: Build package
+        shell: pwsh
+        env:
+          ANDROID_NDK_HOME: ${{ steps.build-ndk.outputs.ndk-path }}
+        run: |
+          $arguments = @('${{ matrix.platform }}', '--env', 'stable', '-v')
+          & dart setup.dart @arguments
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: brand-${{ matrix.artifact_suffix }}
+          path: dist
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: brand-*
+          merge-multiple: true
+
+      - name: Generate checksums and release notes
+        env:
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+          APP_NAME: ${{ env.APP_NAME }}
+          V2BOARD_URL: ${{ env.V2BOARD_URL }}
+        run: |
+          test -n "$RELEASE_TAG"
+          test -n "$(find dist -maxdepth 1 -type f -print -quit)"
+          (cd dist && find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+          cat > release.md <<EOF
+          ## ${APP_NAME} ${RELEASE_TAG}
+
+          Multi-platform white-label FlClash client for v2board.
+
+          - Site: ${V2BOARD_URL}
+          - Login with your existing v2board account; registration is not included in the app.
+          - SHA256SUMS contains the SHA-256 digest for every downloaded package.
+          EOF
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.APP_NAME }} ${{ env.RELEASE_TAG }}
+          files: dist/*
+          body_path: release.md
+          prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
