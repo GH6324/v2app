@@ -190,8 +190,18 @@ jobs:
           ANDROID_NDK_HOME: ${{ steps.build-ndk.outputs.ndk-path }}
         run: |
           $arguments = @('${{ matrix.platform }}', '--env', 'stable', '-v')
-          & dart setup.dart @arguments
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & dart setup.dart @arguments 2>&1 | Tee-Object -FilePath setup.log
+          $setupExit = $LASTEXITCODE
+          if ($setupExit -ne 0) { exit $setupExit }
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ matrix.artifact_suffix }}
+          path: setup.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload package
         uses: actions/upload-artifact@v4

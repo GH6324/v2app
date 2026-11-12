@@ -227,8 +227,17 @@ Future<int> _package(
     return activateResult.exitCode;
   }
 
+  final flutterDistributor = _pubCacheExecutable('flutter_distributor');
+  if (!File(flutterDistributor).existsSync()) {
+    stderr.writeln(
+      'flutter_distributor was activated but its executable was not found at '
+      '${flutterDistributor}.',
+    );
+    return 1;
+  }
+
   final process = await Process.start(
-    'flutter_distributor',
+    flutterDistributor,
     [
       'package',
       '--skip-clean',
@@ -254,6 +263,26 @@ Future<int> _package(
   });
   final exitCode = await process.exitCode;
   return exitCode;
+}
+
+String _pubCacheExecutable(String name) {
+  final configuredCache = Platform.environment['PUB_CACHE'];
+  final cache = configuredCache == null || configuredCache.trim().isEmpty
+      ? Platform.isWindows
+          ? p.join(
+              Platform.environment['LOCALAPPDATA'] ??
+                  Platform.environment['USERPROFILE'] ??
+                  Directory.current.path,
+              'Pub',
+              'Cache',
+            )
+          : p.join(
+              Platform.environment['HOME'] ?? Directory.current.path,
+              '.pub-cache',
+            )
+      : configuredCache;
+  final executable = Platform.isWindows ? '$name.bat' : name;
+  return p.join(cache, 'bin', executable);
 }
 
 String _detectArch() {

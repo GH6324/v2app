@@ -32,7 +32,12 @@ function Replace-Pattern([string]$RelativePath, [string]$Pattern, [scriptblock]$
     param($match)
     & $Builder $match
   }
-  $updated = [regex]::Replace($content, $Pattern, $evaluator)
+  $updated = [regex]::Replace(
+    $content,
+    $Pattern,
+    $evaluator,
+    [System.Text.RegularExpressions.RegexOptions]::Multiline
+  )
   if ($updated -ne $content) {
     Set-Content -LiteralPath $path -Value $updated -Encoding UTF8
   }
@@ -40,11 +45,15 @@ function Replace-Pattern([string]$RelativePath, [string]$Pattern, [scriptblock]$
 
 # Keep native store/package labels aligned with the white-label name. Executable
 # and service names stay stable so existing helper/service upgrades keep working.
+function Quote-YamlScalar([string]$value) {
+  return "'" + $value.Replace("'", "''") + "'"
+}
+
 $xmlApp = { param($match) '<string name="app_name">' + $AppName + '</string>' }
 $xmlService = { param($match) '<string name="service_channel_name">' + $AppName + ' Service</string>' }
-$yamlDisplay = { param($match) 'display_name: ' + $AppName }
-$yamlGeneric = { param($match) 'generic_name: ' + $AppName }
-$yamlApp = { param($match) 'app_name: ' + $AppName }
+$yamlDisplay = { param($match) 'display_name: ' + (Quote-YamlScalar $AppName) }
+$yamlGeneric = { param($match) 'generic_name: ' + (Quote-YamlScalar $AppName) }
+$yamlApp = { param($match) 'app_name: ' + (Quote-YamlScalar $AppName) }
 $xcProduct = { param($match) 'PRODUCT_NAME = ' + $AppName }
 $cppTitle = { param($match) $match.Value -replace '"[^"]*"', ('"' + $AppName + '"') }
 $winTitle = { param($match) 'if (!window.Create(L"' + $AppName + '", origin, size)) {' }
@@ -53,13 +62,13 @@ $rcDescription = { param($match) 'VALUE "FileDescription", "' + $AppName + '" "\
 Replace-Pattern 'android/common/src/main/res/values/strings.xml' '<string name="app_name">[^<]*</string>' $xmlApp
 Replace-Pattern 'android/common/src/main/res/values/strings.xml' '<string name="service_channel_name">[^<]*</string>' $xmlService
 foreach ($file in @('linux/packaging/deb/make_config.yaml', 'linux/packaging/rpm/make_config.yaml', 'linux/packaging/appimage/make_config.yaml')) {
-  Replace-Pattern $file '^display_name:\s*.*$' $yamlDisplay
-  Replace-Pattern $file '^generic_name:\s*.*$' $yamlGeneric
+  Replace-Pattern $file '^display_name:\s*.*\r?$' $yamlDisplay
+  Replace-Pattern $file '^generic_name:\s*.*\r?$' $yamlGeneric
 }
-Replace-Pattern 'windows/packaging/exe/make_config.yaml' '^display_name:\s*.*$' $yamlDisplay
-Replace-Pattern 'windows/packaging/exe/make_config.yaml' '^app_name:\s*.*$' $yamlApp
-Replace-Pattern 'distribute_options.yaml' '^app_name:\s*.*$' $yamlApp
-Replace-Pattern 'macos/Runner/Configs/AppInfo.xcconfig' '^PRODUCT_NAME\s*=.*$' $xcProduct
+Replace-Pattern 'windows/packaging/exe/make_config.yaml' '^display_name:\s*.*\r?$' $yamlDisplay
+Replace-Pattern 'windows/packaging/exe/make_config.yaml' '^app_name:\s*.*\r?$' $yamlApp
+Replace-Pattern 'distribute_options.yaml' '^app_name:\s*.*\r?$' $yamlApp
+Replace-Pattern 'macos/Runner/Configs/AppInfo.xcconfig' '^PRODUCT_NAME\s*=.*\r?$' $xcProduct
 Replace-Pattern 'linux/runner/my_application.cc' 'gtk_header_bar_set_title\(header_bar,\s*"[^"]*"\);' $cppTitle
 Replace-Pattern 'linux/runner/my_application.cc' 'gtk_window_set_title\(window,\s*"[^"]*"\);' $cppTitle
 Replace-Pattern 'windows/runner/main.cpp' 'if \(!window\.Create\(L"[^"]*", origin, size\)\) \{' $winTitle
