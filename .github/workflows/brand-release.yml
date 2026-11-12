@@ -89,6 +89,9 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: Ensure source submodules
+        uses: ./.github/actions/ensure-source-submodules
+
       - name: Enable git long paths (Windows)
         if: runner.os == 'Windows'
         shell: pwsh

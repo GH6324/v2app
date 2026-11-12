@@ -1,0 +1,37 @@
+name: Ensure source submodules
+description: Restore the public source submodules when a fork does not carry their gitlink entries.
+
+runs:
+  using: composite
+  steps:
+    - name: Restore missing source submodules
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        clone_if_missing() {
+          local path="$1"
+          local repository="$2"
+          local branch="$3"
+          local marker="$4"
+
+          if [[ -f "$marker" ]]; then
+            return
+          fi
+
+          rm -rf "$path"
+          git clone --depth 1 --branch "$branch" \
+            "https://github.com/$repository.git" "$path"
+        }
+
+        clone_if_missing \
+          core/Clash.Meta \
+          chen08209/Clash.Meta \
+          FlClash \
+          core/Clash.Meta/go.mod
+
+        clone_if_missing \
+          plugins/prism_ui \
+          chen08209/prism_ui \
+          main \
+          plugins/prism_ui/pubspec.yaml
