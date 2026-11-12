@@ -476,5 +476,3 @@ class ProfilesAction extends _$ProfilesAction {
     }
   }
 }
-
-

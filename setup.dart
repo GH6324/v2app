@@ -267,20 +267,23 @@ Future<int> _package(
 
 String _pubCacheExecutable(String name) {
   final configuredCache = Platform.environment['PUB_CACHE'];
-  final cache = configuredCache == null || configuredCache.trim().isEmpty
-      ? Platform.isWindows
-          ? p.join(
-              Platform.environment['LOCALAPPDATA'] ??
-                  Platform.environment['USERPROFILE'] ??
-                  Directory.current.path,
-              'Pub',
-              'Cache',
-            )
-          : p.join(
-              Platform.environment['HOME'] ?? Directory.current.path,
-              '.pub-cache',
-            )
-      : configuredCache;
+  late final String cache;
+  if (configuredCache != null && configuredCache.trim().isNotEmpty) {
+    cache = configuredCache;
+  } else if (Platform.isWindows) {
+    cache = p.join(
+      Platform.environment['LOCALAPPDATA'] ??
+          Platform.environment['USERPROFILE'] ??
+          Directory.current.path,
+      'Pub',
+      'Cache',
+    );
+  } else {
+    cache = p.join(
+      Platform.environment['HOME'] ?? Directory.current.path,
+      '.pub-cache',
+    );
+  }
   final executable = Platform.isWindows ? '$name.bat' : name;
   return p.join(cache, 'bin', executable);
 }

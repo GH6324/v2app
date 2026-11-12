@@ -32,6 +32,8 @@ abstract final class BrandConfig {
 
   static String profileLabel(String email) {
     final account = email.trim();
-    return account.isEmpty ? profileLabelPrefix : '$profileLabelPrefix · $account';
+    return account.isEmpty
+        ? profileLabelPrefix
+        : '$profileLabelPrefix · $account';
   }
 }

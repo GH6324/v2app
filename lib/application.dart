@@ -210,5 +210,3 @@ class ApplicationState extends ConsumerState<Application> {
     super.dispose();
   }
 }
-
-

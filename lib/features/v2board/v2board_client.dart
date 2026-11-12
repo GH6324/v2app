@@ -92,12 +92,18 @@ class V2BoardSession {
 
 class V2BoardClient {
   V2BoardClient({String? baseUrl})
-      : baseUrl = _normalizeBaseUrl(baseUrl ?? BrandConfig.normalizedApiBaseUrl),
+      : baseUrl = _normalizeBaseUrl(
+          baseUrl ?? BrandConfig.normalizedApiBaseUrl,
+        ),
         _dio = Dio(
           BaseOptions(
-            connectTimeout: Duration(seconds: BrandConfig.requestTimeoutSeconds),
+            connectTimeout: Duration(
+              seconds: BrandConfig.requestTimeoutSeconds,
+            ),
             sendTimeout: Duration(seconds: BrandConfig.requestTimeoutSeconds),
-            receiveTimeout: Duration(seconds: BrandConfig.requestTimeoutSeconds),
+            receiveTimeout: Duration(
+              seconds: BrandConfig.requestTimeoutSeconds,
+            ),
             headers: const {
               'Accept': 'application/json',
               'Content-Type': 'application/json',
@@ -263,5 +269,3 @@ class V2BoardClient {
     await _secureStorage.delete(key: _sessionKey);
   }
 }
-
-

@@ -167,7 +167,6 @@ class _V2BoardGateState extends ConsumerState<V2BoardGate> {
     await action.updateProfile(updated);
   }
 
-
   void _startRefreshTimer() {
     _refreshTimer ??= Timer.periodic(
       const Duration(minutes: 20),
@@ -422,7 +421,9 @@ class _V2BoardLoginView extends StatelessWidget {
                               ? const SizedBox(
                                   height: 20,
                                   width: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : Text(hasSession ? '重试同步订阅' : '登录并同步订阅'),
                         ),
@@ -451,4 +452,3 @@ class _V2BoardLoginView extends StatelessWidget {
     );
   }
 }
-
